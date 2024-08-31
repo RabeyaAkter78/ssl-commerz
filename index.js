@@ -3,9 +3,14 @@ const cors = require("cors");
 require("dotenv").config();
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const { default: axios } = require("axios");
+const SSLCommerzPayment = require("sslcommerz-lts");
 
 const app = express();
 const port = process.env.PORT || 5000;
+
+const store_id = process.env.STORE_ID;
+const store_passwd = process.env.STORE_PASS;
+const is_live = false; //true for live, false for sandbox
 
 // middlewares
 app.use(cors());
@@ -48,14 +53,14 @@ app.post("/create-payment", async (req, res) => {
   const TrxId = new ObjectId().toString();
 
   const initiate_data = {
-    store_id: "progr66d01c76ac5c3",
-    store_passwd: "progr66d01c76ac5c3@ssl",
+    store_id: store_id,
+    store_passwd: store_passwd,
     total_amount: paymentinfo.amount,
     currency: "USD",
     tran_id: TrxId,
-    success_url: "http://localhost:3000/success-payment",
-    fail_url: "http://yoursite.com/fail.php",
-    cancel_url: "http://yoursite.com/cancel.php",
+    success_url: 'http://localhost:5000/success-payment',
+    fail_url: "http://localhost:5000/fail-payment",
+    cancel_url: "http://localhost:5000/cancel-payment",
     emi_option: "0",
     cus_name: "Customer Name",
     cus_email: "cust@yahoo.com",
@@ -81,6 +86,7 @@ app.post("/create-payment", async (req, res) => {
     value_c: "ref003_C",
     value_d: "ref004_D",
   };
+  console.log(initiate_data);
 
   const response = await axios({
     method: "POST",
@@ -108,8 +114,9 @@ app.post("/create-payment", async (req, res) => {
   } else {
     res.status(500).send("Database connection not established");
   }
-
   console.log(response);
+
+  
 });
 
 // Success payment
@@ -118,17 +125,34 @@ app.post("/success-payment", async (req, res) => {
   if (successData.status !== "VALID") {
     throw new Error("Invalid Payment");
   }
-  // update the database:
-  const query = { paymentId: successData.TrxId };
+  const query = { paymentId: successData.tran_id };
   const update = {
     $set: {
       status: "Success",
     },
   };
-const updateData=await payments.updateOne(query,update)
-  console.log("successdata:", successData);
-  console.log("updateData:", updateData);
+  try {
+    const updateData = await PaymentCollection.updateOne(query, update);
+    console.log("successdata:", successData);
+    console.log("updateData:", updateData);
+    res.redirect('http://localhost:3000/success-payment');
+    // res.send({ message: "Payment updated successfully" });
+  } catch (error) {
+    console.error("Error updating payment:", error);
+    res.status(500).send("Error updating payment");
+  }
 });
+// Fail Payment:
+app.post('/fail-payment',async(req,res)=>{
+  res.redirect('http://localhost:3000/fail-payment');
+})
+// cancel Payment:
+app.post('/cancel-payment',async(req,res)=>[
+  res.redirect('http://localhost:3000/cancel-payment')
+])
+
+
+
 
 app.get("/", (req, res) => {
   res.send("SSl commerz is running");
